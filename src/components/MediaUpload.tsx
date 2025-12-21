@@ -1,0 +1,288 @@
+import { useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { ImagePlus, Video, Music, X, Lock } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+interface MediaUploadProps {
+  userPlan: "free" | "premium" | "gold";
+  photoPreview: string | null;
+  videoPreview: string | null;
+  audioPreview: string | null;
+  onPhotoSelect: (file: File) => void;
+  onVideoSelect: (file: File) => void;
+  onAudioSelect: (file: File) => void;
+  onRemovePhoto: () => void;
+  onRemoveVideo: () => void;
+  onRemoveAudio: () => void;
+  selectedAddOns?: string[];
+  disabled?: boolean;
+}
+
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
+
+const MediaUpload = ({
+  userPlan,
+  photoPreview,
+  videoPreview,
+  audioPreview,
+  onPhotoSelect,
+  onVideoSelect,
+  onAudioSelect,
+  onRemovePhoto,
+  onRemoveVideo,
+  onRemoveAudio,
+  selectedAddOns = [],
+  disabled = false,
+}: MediaUploadProps) => {
+  const photoRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLInputElement>(null);
+
+  // Access rules based on plan
+  const canUploadImage = userPlan === "premium" || userPlan === "gold" || selectedAddOns.includes("image");
+  const canUploadVideo = userPlan === "gold" || selectedAddOns.includes("video");
+  const canUploadAudio = userPlan === "gold" || selectedAddOns.includes("voice_note");
+
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: "photo" | "video" | "audio",
+    onSelect: (file: File) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE) {
+      alert("❌ File too large. Please upload files under 25 MB.");
+      return;
+    }
+
+    onSelect(file);
+  };
+
+  const getMediaAccessInfo = (type: "image" | "video" | "audio") => {
+    if (type === "image") {
+      if (userPlan === "premium" || userPlan === "gold") return { included: true, label: "Included ✓" };
+      if (selectedAddOns.includes("image")) return { included: false, label: "Add-on selected" };
+      return { included: false, label: "+₹10" };
+    }
+    if (type === "video") {
+      if (userPlan === "gold") return { included: true, label: "Included ✓" };
+      if (selectedAddOns.includes("video")) return { included: false, label: "Add-on selected" };
+      return { included: false, label: "+₹29" };
+    }
+    if (type === "audio") {
+      if (userPlan === "gold") return { included: true, label: "Included ✓" };
+      if (selectedAddOns.includes("voice_note")) return { included: false, label: "Add-on selected" };
+      return { included: false, label: "+₹19" };
+    }
+    return { included: false, label: "" };
+  };
+
+  const MediaButton = ({
+    icon: Icon,
+    label,
+    onClick,
+    hasPreview,
+    canAccess,
+    accessInfo,
+    tooltipText,
+  }: {
+    icon: typeof ImagePlus;
+    label: string;
+    onClick: () => void;
+    hasPreview: boolean;
+    canAccess: boolean;
+    accessInfo: { included: boolean; label: string };
+    tooltipText: string;
+  }) => {
+    if (!canAccess) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-14 flex-col gap-0.5 opacity-60 cursor-not-allowed"
+                disabled
+              >
+                <div className="flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  <Icon className="w-4 h-4" />
+                </div>
+                <span className="text-xs">{label}</span>
+                <span className="text-[10px] text-muted-foreground">{accessInfo.label}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{tooltipText}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    return (
+      <Button
+        type="button"
+        variant={hasPreview ? "default" : "outline"}
+        className="flex-1 h-14 flex-col gap-0.5"
+        onClick={onClick}
+        disabled={disabled}
+      >
+        <Icon className="w-4 h-4" />
+        <span className="text-xs">{label}</span>
+        {accessInfo.included && (
+          <span className="text-[10px] text-accent">Included</span>
+        )}
+      </Button>
+    );
+  };
+
+  const imageAccess = getMediaAccessInfo("image");
+  const videoAccess = getMediaAccessInfo("video");
+  const audioAccess = getMediaAccessInfo("audio");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-bold text-foreground">
+          Add Media (Optional)
+        </h3>
+        {userPlan === "free" && (
+          <span className="text-xs text-gold bg-gold/10 px-2 py-1 rounded-full">
+            💛 Select add-ons below
+          </span>
+        )}
+      </div>
+
+      {/* Hidden file inputs */}
+      <input
+        ref={photoRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={(e) => handleFileChange(e, "photo", onPhotoSelect)}
+        className="hidden"
+      />
+      <input
+        ref={videoRef}
+        type="file"
+        accept="video/mp4"
+        onChange={(e) => handleFileChange(e, "video", onVideoSelect)}
+        className="hidden"
+      />
+      <input
+        ref={audioRef}
+        type="file"
+        accept="audio/mpeg,audio/wav"
+        onChange={(e) => handleFileChange(e, "audio", onAudioSelect)}
+        className="hidden"
+      />
+
+      {/* Media buttons */}
+      <div className="flex gap-2">
+        <MediaButton
+          icon={ImagePlus}
+          label="🖼 Image"
+          onClick={() => photoRef.current?.click()}
+          hasPreview={!!photoPreview}
+          canAccess={canUploadImage}
+          accessInfo={imageAccess}
+          tooltipText={userPlan === "free" ? "🔒 Add Image add-on (+₹10) or upgrade to Premium" : "Available with Premium"}
+        />
+        <MediaButton
+          icon={Video}
+          label="🎥 Video"
+          onClick={() => videoRef.current?.click()}
+          hasPreview={!!videoPreview}
+          canAccess={canUploadVideo}
+          accessInfo={videoAccess}
+          tooltipText={userPlan === "gold" ? "Included in Gold" : "🔒 Add Video add-on (+₹29) or upgrade to Gold"}
+        />
+        <MediaButton
+          icon={Music}
+          label="🔊 Audio"
+          onClick={() => audioRef.current?.click()}
+          hasPreview={!!audioPreview}
+          canAccess={canUploadAudio}
+          accessInfo={audioAccess}
+          tooltipText={userPlan === "gold" ? "Included in Gold" : "🔒 Add AI Voice add-on (+₹19) or upgrade to Gold"}
+        />
+      </div>
+
+      {/* Previews */}
+      <div className="space-y-3">
+        {photoPreview && (
+          <div className="relative rounded-xl overflow-hidden border border-border">
+            <img src={photoPreview} alt="Preview" className="w-full h-40 object-cover" />
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              className="absolute top-2 right-2 w-8 h-8"
+              onClick={onRemovePhoto}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
+        {videoPreview && (
+          <div className="relative rounded-xl overflow-hidden border border-border">
+            <video src={videoPreview} className="w-full h-40 object-cover" />
+            <div className="absolute inset-0 flex items-center justify-center bg-foreground/20">
+              <div className="w-12 h-12 rounded-full bg-card/90 flex items-center justify-center">
+                <Video className="w-6 h-6 text-primary" />
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              className="absolute top-2 right-2 w-8 h-8"
+              onClick={onRemoveVideo}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
+        {audioPreview && (
+          <div className="relative rounded-xl border border-border p-4 bg-muted/50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Music className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <div className="h-2 bg-primary/20 rounded-full">
+                  <div className="h-2 bg-primary rounded-full w-1/3" />
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground">Audio attached</span>
+            </div>
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              className="absolute top-2 right-2 w-8 h-8"
+              onClick={onRemoveAudio}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Max 25MB • Image: JPG, PNG, WEBP • Video: MP4 • Audio: MP3, WAV
+      </p>
+    </div>
+  );
+};
+
+export default MediaUpload;

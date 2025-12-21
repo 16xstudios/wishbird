@@ -1,0 +1,193 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fonts Setup */
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/Satoshi-Variable.ttf') format('truetype');
+  font-weight: 300 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+@layer base {
+  :root {
+    /* Background: Pure White */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    /* Cards: White with subtle separation if needed */
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary: Clean Bright Blue */
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Secondary: Soft Slate/Gray */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    /* Muted: Neutral Gray */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    /* Accent: Clean Teal */
+    --accent: 170 70% 50%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.75rem;
+
+    /* Extended palette */
+    /* Clean, soft variants */
+    --indigo-light: 221 83% 95%;
+    --indigo-glow: 221 83% 70%;
+    --pink-soft: 170 70% 95%;
+    /* Re-purposed for teal softness or keep pink as accent? User said clean. Let's make it soft teal. */
+    --pink-vibrant: 170 70% 50%;
+    --cream: 60 30% 98%;
+    --gold: 45 93% 47%;
+
+    /* WhatsApp Green - Kept as it is functionally specific */
+    --whatsapp: 142 70% 49%;
+    --whatsapp-light: 142 70% 95%;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(170 70% 50%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
+    --gradient-glow: radial-gradient(circle at center, hsl(221 83% 53% / 0.15) 0%, transparent 70%);
+    --gradient-cta: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(170 70% 50%) 100%);
+    --gradient-pricing: linear-gradient(180deg, hsl(221 83% 98%) 0%, hsl(170 70% 98%) 100%);
+
+    /* Shadows */
+    --shadow-soft: 0 4px 20px hsl(221 83% 53% / 0.08);
+    --shadow-glow: 0 0 40px hsl(221 83% 53% / 0.2);
+    --shadow-card: 0 8px 32px hsl(220 20% 50% / 0.05);
+    --shadow-button: 0 4px 16px hsl(221 83% 53% / 0.25);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Satoshi', 'Inter', sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Satoshi', 'Inter', sans-serif;
+    font-weight: 600;
+  }
+}
+
+@layer components {
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-hero);
+  }
+
+  .glow-indigo {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .card-glow {
+    box-shadow: var(--shadow-card);
+  }
+
+  .btn-glow {
+    box-shadow: var(--shadow-button);
+  }
+
+  .sparkle {
+    @apply absolute w-2 h-2 rounded-full;
+    background: hsl(var(--gold));
+    animation: sparkle 2s ease-in-out infinite;
+  }
+
+  .float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .float-delayed {
+    animation: float 6s ease-in-out infinite 2s;
+  }
+}
+
+@layer utilities {
+  @keyframes sparkle {
+
+    0%,
+    100% {
+      opacity: 0;
+      transform: scale(0);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes float {
+
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  @keyframes pulse-glow {
+
+    0%,
+    100% {
+      box-shadow: 0 0 20px hsl(221 83% 53% / 0.3);
+    }
+
+    50% {
+      box-shadow: 0 0 40px hsl(221 83% 53% / 0.5);
+    }
+  }
+
+  @keyframes confetti {
+    0% {
+      transform: translateY(0) rotate(0deg);
+      opacity: 1;
+    }
+
+    100% {
+      transform: translateY(-100px) rotate(720deg);
+      opacity: 0;
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+}
