@@ -14,12 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          credits_purchased: number
+          currency: string
+          id: string
+          plan: string
+          razorpay_order_id: string
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          credits_purchased: number
+          currency?: string
+          id?: string
+          plan: string
+          razorpay_order_id: string
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          credits_purchased?: number
+          currency?: string
+          id?: string
+          plan?: string
+          razorpay_order_id?: string
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
+          credits: number
           display_name: string | null
           id: string
           phone_number: string | null
+          plan_expires_at: string | null
           subscription_plan: string
           updated_at: string
           user_id: string
@@ -27,9 +74,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          credits?: number
           display_name?: string | null
           id?: string
           phone_number?: string | null
+          plan_expires_at?: string | null
           subscription_plan?: string
           updated_at?: string
           user_id: string
@@ -37,9 +86,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          credits?: number
           display_name?: string | null
           id?: string
           phone_number?: string | null
+          plan_expires_at?: string | null
           subscription_plan?: string
           updated_at?: string
           user_id?: string
@@ -118,7 +169,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      subscription_plan: "free" | "basic" | "pro" | "premium"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -245,6 +296,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      subscription_plan: ["free", "basic", "pro", "premium"],
+    },
   },
 } as const

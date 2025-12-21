@@ -28,7 +28,10 @@ import {
   Send,
   Loader2,
   AlertCircle,
+  Lock,
+  Coins,
 } from "lucide-react";
+import { CREDIT_COSTS, PLANS, calculateWishCredits, canUseFeature, type PlanType } from "@/lib/credits";
 
 const occasions = [
   "Birthday",
@@ -43,8 +46,6 @@ const occasions = [
 
 const languages = ["English", "Tamil", "Telugu", "Kannada", "Malayalam", "Hindi"];
 
-const FREE_WISH_LIMIT = 2;
-
 const CreateWish = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ const CreateWish = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [userProfile, setUserProfile] = useState<{
     subscription_plan: string;
-    wishes_sent_count: number;
+    credits: number;
   } | null>(null);
 
   // Form state
@@ -77,9 +78,24 @@ const CreateWish = () => {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
 
-  const isSubscribed = userProfile?.subscription_plan !== "free";
-  const wishesRemaining = FREE_WISH_LIMIT - (userProfile?.wishes_sent_count || 0);
-  const canSendWish = isSubscribed || wishesRemaining > 0;
+  const plan = (userProfile?.subscription_plan || "free") as PlanType;
+  const credits = userProfile?.credits || 0;
+
+  // Calculate credits needed for current wish
+  const creditsNeeded = calculateWishCredits(
+    !!formData.messageText,
+    !!photoFile,
+    !!videoFile,
+    !!audioFile
+  );
+  const hasEnoughCredits = credits >= creditsNeeded;
+  const canSendWish = creditsNeeded === 0 || hasEnoughCredits;
+
+  // Feature access
+  const canUseVideo = canUseFeature(plan, "video");
+  const canUseAudio = plan === "premium";
+  const canUseAI = plan === "premium";
+  const languageRestricted = plan === "free" && formData.language !== "English";
 
   useEffect(() => {
     if (!loading && !user) {
@@ -97,7 +113,7 @@ const CreateWish = () => {
     if (!user) return;
     const { data } = await supabase
       .from("profiles")
-      .select("subscription_plan, wishes_sent_count")
+      .select("subscription_plan, credits")
       .eq("user_id", user.id)
       .single();
     if (data) setUserProfile(data);
@@ -108,6 +124,15 @@ const CreateWish = () => {
   };
 
   const handlePhotoSelect = (file: File) => {
+    // Free plan: only 1 image allowed
+    if (plan === "free" && photoFile) {
+      toast({
+        title: "Image Limit",
+        description: "Free plan allows only 1 image. Upgrade to add more!",
+        variant: "destructive",
+      });
+      return;
+    }
     setPhotoFile(file);
     const reader = new FileReader();
     reader.onloadend = () => setPhotoPreview(reader.result as string);
@@ -115,20 +140,36 @@ const CreateWish = () => {
   };
 
   const handleVideoSelect = (file: File) => {
+    if (!canUseVideo) {
+      toast({
+        title: "Feature Locked 🔒",
+        description: "Upgrade to Pro to add video messages!",
+        variant: "destructive",
+      });
+      return;
+    }
     setVideoFile(file);
     setVideoPreview(URL.createObjectURL(file));
   };
 
   const handleAudioSelect = (file: File) => {
+    if (!canUseAudio) {
+      toast({
+        title: "Feature Locked 🔒",
+        description: "Upgrade to Premium to add audio messages!",
+        variant: "destructive",
+      });
+      return;
+    }
     setAudioFile(file);
     setAudioPreview(URL.createObjectURL(file));
   };
 
   const generateAIMessage = async () => {
-    if (!canSendWish) {
+    if (!canUseAI) {
       toast({
-        title: "Limit Reached",
-        description: "You've used your 2 free wishes. Upgrade to continue.",
+        title: "Premium Feature 👑",
+        description: "AI generation is available on Premium plan (free, no credits!)",
         variant: "destructive",
       });
       return;
@@ -146,8 +187,9 @@ const CreateWish = () => {
     setIsGenerating(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("generate-wish", {
+      const { data, error } = await supabase.functions.invoke("generate-ai-content", {
         body: {
+          type: "text",
           recipientName: formData.recipientName,
           senderName: formData.senderName,
           occasion: formData.occasion,
@@ -158,7 +200,7 @@ const CreateWish = () => {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      handleChange("messageText", data.wish);
+      handleChange("messageText", data.content);
       toast({ title: "AI Magic! ✨", description: "Generated a beautiful message for you!" });
     } catch (error) {
       console.error("AI generation error:", error);
@@ -200,10 +242,41 @@ const CreateWish = () => {
       return;
     }
 
+    // Language restriction for free plan
+    if (languageRestricted) {
+      toast({
+        title: "Language Restricted",
+        description: "Free plan supports English only. Upgrade for multi-language!",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Video restriction
+    if (videoFile && !canUseVideo) {
+      toast({
+        title: "Feature Locked",
+        description: "Upgrade to Pro to send video messages!",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Audio restriction
+    if (audioFile && !canUseAudio) {
+      toast({
+        title: "Feature Locked",
+        description: "Upgrade to Premium to send audio messages!",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Credit check
     if (!canSendWish) {
       toast({
-        title: "Limit Reached",
-        description: "🎉 You've used your 2 free wishes. Upgrade your account to continue sending magical wishes.",
+        title: "Insufficient Credits",
+        description: `You need ${creditsNeeded} credits. You have ${credits}. Please upgrade!`,
         variant: "destructive",
       });
       return;
@@ -237,17 +310,16 @@ const CreateWish = () => {
 
       if (wishError) throw wishError;
 
-      // Update wish count for free users
-      if (!isSubscribed) {
-        await supabase
-          .from("profiles")
-          .update({ wishes_sent_count: (userProfile?.wishes_sent_count || 0) + 1 })
-          .eq("user_id", user.id);
-      }
+      // Deduct credits (AI is free for Premium)
+      const newCredits = credits - creditsNeeded;
+      await supabase
+        .from("profiles")
+        .update({ credits: Math.max(0, newCredits) })
+        .eq("user_id", user.id);
 
       toast({
         title: "🎉 Your wish is scheduled successfully!",
-        description: "We'll deliver it with love at the perfect moment.",
+        description: `${creditsNeeded} credits used. ${newCredits} remaining.`,
       });
       navigate("/dashboard");
     } catch (error) {
@@ -283,17 +355,22 @@ const CreateWish = () => {
               <span className="font-bold text-lg text-foreground">WishBot</span>
             </Link>
           </div>
-          {!isSubscribed && (
-            <div className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full">
-              Free wishes left: <span className="font-bold text-primary">{Math.max(0, wishesRemaining)}</span> / {FREE_WISH_LIMIT}
+          <div className="flex items-center gap-3">
+            <div className="text-sm bg-muted px-3 py-1 rounded-full flex items-center gap-2">
+              <Coins className="w-4 h-4 text-gold" />
+              <span className="font-bold text-foreground">{credits}</span>
+              <span className="text-muted-foreground">credits</span>
             </div>
-          )}
+            <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium capitalize">
+              {plan}
+            </span>
+          </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {/* Limit Warning */}
-        {!canSendWish && (
+        {/* Credit Warning */}
+        {creditsNeeded > 0 && !hasEnoughCredits && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -301,10 +378,39 @@ const CreateWish = () => {
           >
             <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-destructive">🎉 You've used your 2 free wishes.</p>
+              <p className="font-semibold text-destructive">Insufficient Credits</p>
               <p className="text-sm text-muted-foreground">
-                Upgrade your account to continue sending magical wishes.
+                You need {creditsNeeded} credits for this wish. You have {credits}.
+                <Button variant="link" className="text-primary p-0 h-auto ml-1" onClick={() => navigate("/#pricing")}>
+                  Upgrade now
+                </Button>
               </p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Credit Cost Preview */}
+        {creditsNeeded > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-gold/10 border border-gold/30 rounded-xl"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Coins className="w-5 h-5 text-gold" />
+                <span className="font-medium text-foreground">Credits for this wish:</span>
+              </div>
+              <div className="text-right">
+                <span className="text-lg font-bold text-gold">{creditsNeeded}</span>
+                <span className="text-sm text-muted-foreground ml-1">/ {credits} available</span>
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {formData.messageText && <span className="bg-muted px-2 py-1 rounded">Text: {CREDIT_COSTS.text}</span>}
+              {photoFile && <span className="bg-muted px-2 py-1 rounded">Image: +{CREDIT_COSTS.image}</span>}
+              {videoFile && <span className="bg-muted px-2 py-1 rounded">Video: +{CREDIT_COSTS.video}</span>}
+              {audioFile && <span className="bg-muted px-2 py-1 rounded">Audio: +{CREDIT_COSTS.audio}</span>}
             </div>
           </motion.div>
         )}
@@ -384,14 +490,25 @@ const CreateWish = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Language</Label>
-                  <Select value={formData.language} onValueChange={(v) => handleChange("language", v)}>
-                    <SelectTrigger>
+                  <Label className="flex items-center gap-2">
+                    Language
+                    {plan === "free" && (
+                      <span className="text-xs text-muted-foreground">(English only on Free)</span>
+                    )}
+                  </Label>
+                  <Select 
+                    value={formData.language} 
+                    onValueChange={(v) => handleChange("language", v)}
+                    disabled={plan === "free"}
+                  >
+                    <SelectTrigger className={plan === "free" ? "opacity-60" : ""}>
                       <SelectValue placeholder="Select language" />
                     </SelectTrigger>
                     <SelectContent>
                       {languages.map((lang) => (
-                        <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+                        <SelectItem key={lang} value={lang} disabled={plan === "free" && lang !== "English"}>
+                          {lang} {plan === "free" && lang !== "English" && "🔒"}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -434,9 +551,10 @@ const CreateWish = () => {
                     variant="ghost"
                     size="sm"
                     onClick={generateAIMessage}
-                    disabled={isGenerating || !canSendWish}
-                    className="text-primary"
+                    disabled={isGenerating || !canUseAI}
+                    className={canUseAI ? "text-primary" : "text-muted-foreground"}
                   >
+                    {!canUseAI && <Lock className="w-3 h-3 mr-1" />}
                     {isGenerating ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -445,7 +563,7 @@ const CreateWish = () => {
                     ) : (
                       <>
                         <Wand2 className="w-4 h-4 mr-1" />
-                        ✨ Generate with AI
+                        {canUseAI ? "✨ Generate with AI (free)" : "AI (Premium)"}
                       </>
                     )}
                   </Button>
@@ -454,7 +572,7 @@ const CreateWish = () => {
                   <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                   <Textarea
                     id="messageText"
-                    placeholder="Write your heartfelt message or use AI to generate one..."
+                    placeholder="Write your heartfelt message..."
                     value={formData.messageText}
                     onChange={(e) => handleChange("messageText", e.target.value)}
                     rows={6}
@@ -463,20 +581,127 @@ const CreateWish = () => {
                 </div>
               </div>
 
-              {/* Media Upload */}
-              <MediaUpload
-                userPlan={userProfile?.subscription_plan === "gold" ? "gold" : userProfile?.subscription_plan === "premium" ? "premium" : "free"}
-                photoPreview={photoPreview}
-                videoPreview={videoPreview}
-                audioPreview={audioPreview}
-                onPhotoSelect={handlePhotoSelect}
-                onVideoSelect={handleVideoSelect}
-                onAudioSelect={handleAudioSelect}
-                onRemovePhoto={() => { setPhotoFile(null); setPhotoPreview(null); }}
-                onRemoveVideo={() => { setVideoFile(null); setVideoPreview(null); }}
-                onRemoveAudio={() => { setAudioFile(null); setAudioPreview(null); }}
-                disabled={!canSendWish}
-              />
+              {/* Media Upload with restrictions */}
+              <div className="space-y-4">
+                <Label>Attachments</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Image - available to all */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => e.target.files?.[0] && handlePhotoSelect(e.target.files[0])}
+                      className="hidden"
+                      id="photo-upload"
+                    />
+                    <label
+                      htmlFor="photo-upload"
+                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                        photoPreview ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      {photoPreview ? (
+                        <img src={photoPreview} alt="Preview" className="w-12 h-12 object-cover rounded-lg" />
+                      ) : (
+                        <>
+                          <span className="text-2xl mb-1">🖼️</span>
+                          <span className="text-xs text-muted-foreground">Image</span>
+                          <span className="text-xs text-primary">+{CREDIT_COSTS.image} credits</span>
+                        </>
+                      )}
+                    </label>
+                    {photoPreview && (
+                      <button
+                        type="button"
+                        onClick={() => { setPhotoFile(null); setPhotoPreview(null); }}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-white rounded-full text-xs"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Video - Pro+ only */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={(e) => e.target.files?.[0] && handleVideoSelect(e.target.files[0])}
+                      className="hidden"
+                      id="video-upload"
+                      disabled={!canUseVideo}
+                    />
+                    <label
+                      htmlFor="video-upload"
+                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl transition-colors ${
+                        !canUseVideo 
+                          ? "border-border/30 bg-muted/30 cursor-not-allowed opacity-60" 
+                          : videoPreview 
+                            ? "border-primary bg-primary/5 cursor-pointer" 
+                            : "border-border hover:border-primary/50 cursor-pointer"
+                      }`}
+                    >
+                      {!canUseVideo && <Lock className="w-4 h-4 text-muted-foreground mb-1" />}
+                      <span className="text-2xl mb-1">🎥</span>
+                      <span className="text-xs text-muted-foreground">Video</span>
+                      {canUseVideo ? (
+                        <span className="text-xs text-primary">+{CREDIT_COSTS.video} credits</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Pro+</span>
+                      )}
+                    </label>
+                    {videoPreview && (
+                      <button
+                        type="button"
+                        onClick={() => { setVideoFile(null); setVideoPreview(null); }}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-white rounded-full text-xs"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Audio - Premium only */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      onChange={(e) => e.target.files?.[0] && handleAudioSelect(e.target.files[0])}
+                      className="hidden"
+                      id="audio-upload"
+                      disabled={!canUseAudio}
+                    />
+                    <label
+                      htmlFor="audio-upload"
+                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl transition-colors ${
+                        !canUseAudio 
+                          ? "border-border/30 bg-muted/30 cursor-not-allowed opacity-60" 
+                          : audioPreview 
+                            ? "border-primary bg-primary/5 cursor-pointer" 
+                            : "border-border hover:border-primary/50 cursor-pointer"
+                      }`}
+                    >
+                      {!canUseAudio && <Lock className="w-4 h-4 text-muted-foreground mb-1" />}
+                      <span className="text-2xl mb-1">🔊</span>
+                      <span className="text-xs text-muted-foreground">Audio</span>
+                      {canUseAudio ? (
+                        <span className="text-xs text-primary">+{CREDIT_COSTS.audio} credits</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Premium</span>
+                      )}
+                    </label>
+                    {audioPreview && (
+                      <button
+                        type="button"
+                        onClick={() => { setAudioFile(null); setAudioPreview(null); }}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-white rounded-full text-xs"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               <Button
                 type="submit"
@@ -493,32 +718,34 @@ const CreateWish = () => {
                 ) : (
                   <>
                     <Send className="w-5 h-5 mr-2" />
-                    Schedule Wish ✨
+                    Schedule Wish ({creditsNeeded} credits)
                   </>
                 )}
               </Button>
             </form>
           </motion.div>
 
-          {/* Live Preview */}
+          {/* Preview */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             className="lg:sticky lg:top-24 h-fit"
           >
-            <h2 className="text-xl font-bold text-foreground mb-4">
-              Live WhatsApp Preview 📱
-            </h2>
+            <h2 className="text-xl font-bold text-foreground mb-4">Live Preview 📱</h2>
             <WhatsAppLivePreview
-              recipientName={formData.recipientName}
-              senderName={formData.senderName}
-              occasion={formData.occasion}
+              recipientName={formData.recipientName || "Recipient"}
+              senderName={formData.senderName || "Sender"}
+              occasion={formData.occasion || "Birthday"}
               language={formData.language}
               messageText={formData.messageText}
-              scheduledTime={formData.scheduledTime}
-              photoPreview={photoPreview}
-              videoPreview={videoPreview}
-              audioPreview={audioPreview}
+              scheduledTime={
+                formData.scheduledDate && formData.scheduledTime
+                  ? new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toLocaleString()
+                  : undefined
+              }
+              photoPreview={photoPreview || undefined}
+              videoPreview={videoPreview || undefined}
+              audioPreview={audioPreview || undefined}
             />
           </motion.div>
         </div>
