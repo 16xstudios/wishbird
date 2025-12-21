@@ -1,9 +1,40 @@
 import { sendTextMessage, sendMediaFromUrl, isWhatsAppReady } from './whatsapp.js';
 
 /**
+ * Format message with proper template
+ */
+function formatMessage(wish) {
+    const { recipient_name, sender_name, occasion, message_text, language } = wish;
+    
+    const occasionEmojis = {
+        Birthday: '🎂🎉',
+        Anniversary: '💍💕',
+        Festival: '🎊✨',
+        Apology: '🙏💛',
+        Appreciation: '🌟💜',
+        Congratulations: '🏆🎊',
+        'Get Well Soon': '💐🙏',
+        'Just Because': '💜✨'
+    };
+
+    const emoji = occasionEmojis[occasion] || '✨💜';
+    
+    // If user provided custom message, use it
+    if (message_text && message_text.trim()) {
+        return message_text;
+    }
+    
+    // Default template message
+    return `${emoji} *${occasion} Wishes for ${recipient_name}!* ${emoji}\n\n` +
+           `Dear ${recipient_name},\n\n` +
+           `Wishing you a wonderful ${occasion.toLowerCase()}! ` +
+           `May this special day bring you joy, happiness, and all the love you deserve.\n\n` +
+           `With love,\n${sender_name} 💜\n\n` +
+           `_Sent with love via WishBot_ ✨`;
+}
+
+/**
  * Send a wish to a recipient via WhatsApp
- * @param {Object} wish - Wish object from Supabase
- * @returns {Object} - Result with success status and any errors
  */
 export async function sendWish(wish) {
     if (!isWhatsAppReady()) {
@@ -30,23 +61,23 @@ export async function sendWish(wish) {
     let messagesSent = 0;
 
     try {
-        // 1. Send text message first
-        if (message_text) {
-            try {
-                await sendTextMessage(recipient_phone, message_text);
-                console.log('   ✅ Text message sent');
-                messagesSent++;
-            } catch (err) {
-                console.error('   ❌ Failed to send text:', err.message);
-                errors.push(`Text: ${err.message}`);
-            }
+        // 1. Send formatted text message
+        const formattedMessage = formatMessage(wish);
+        try {
+            await sendTextMessage(recipient_phone, formattedMessage);
+            console.log('   ✅ Text message sent');
+            messagesSent++;
+        } catch (err) {
+            console.error('   ❌ Failed to send text:', err.message);
+            errors.push(`Text: ${err.message}`);
         }
 
         // 2. Send greeting card / image
         const imageUrl = greeting_card_url || photo_url;
         if (imageUrl) {
             try {
-                await sendMediaFromUrl(recipient_phone, imageUrl, `🎉 ${occasion} wishes from ${sender_name}!`, 'image');
+                const caption = `🎉 *${occasion} Wishes!*\nFrom: ${sender_name} 💜`;
+                await sendMediaFromUrl(recipient_phone, imageUrl, caption, 'image');
                 console.log('   ✅ Image/greeting card sent');
                 messagesSent++;
             } catch (err) {
@@ -58,7 +89,8 @@ export async function sendWish(wish) {
         // 3. Send video
         if (video_url) {
             try {
-                await sendMediaFromUrl(recipient_phone, video_url, `🎬 Video message from ${sender_name}`, 'video');
+                const caption = `🎬 *Video Message*\nFrom: ${sender_name}`;
+                await sendMediaFromUrl(recipient_phone, video_url, caption, 'video');
                 console.log('   ✅ Video sent');
                 messagesSent++;
             } catch (err) {
@@ -80,19 +112,11 @@ export async function sendWish(wish) {
             }
         }
 
-        // Determine success (at least one message sent)
         if (messagesSent > 0) {
             console.log(`   📊 Summary: ${messagesSent} message(s) sent successfully`);
-            return {
-                success: true,
-                messagesSent,
-                errors: errors.length > 0 ? errors : null
-            };
+            return { success: true, messagesSent, errors: errors.length > 0 ? errors : null };
         } else {
-            return {
-                success: false,
-                error: errors.length > 0 ? errors.join('; ') : 'No content to send'
-            };
+            return { success: false, error: errors.length > 0 ? errors.join('; ') : 'No content to send' };
         }
 
     } catch (error) {

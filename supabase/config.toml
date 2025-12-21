@@ -1,1 +1,13 @@
 project_id = "tdkrsgaauvsyvryyzrim"
+
+[functions.generate-wish]
+verify_jwt = false
+
+[functions.create-razorpay-order]
+verify_jwt = false
+
+[functions.verify-razorpay-payment]
+verify_jwt = false
+
+[functions.generate-ai-content]
+verify_jwt = false
