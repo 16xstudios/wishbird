@@ -1,4 +1,4 @@
-import { Sparkles, Heart } from "lucide-react";
+import { Bird, Heart } from "lucide-react";
 
 const Footer = () => {
   const links = {
@@ -29,9 +29,9 @@ const Footer = () => {
           <div className="lg:col-span-2">
             <a href="#" className="flex items-center gap-2 mb-4">
               <div className="w-10 h-10 rounded-xl bg-gradient-cta flex items-center justify-center shadow-button">
-                <Sparkles className="w-5 h-5 text-primary-foreground" />
+                <Bird className="w-5 h-5 text-primary-foreground" />
               </div>
-              <span className="font-bold text-xl text-foreground">WishBot</span>
+              <span className="font-bold text-xl text-foreground">WishBird</span>
             </a>
             <p className="text-muted-foreground mb-4 max-w-xs">
               Making moments magical with AI-powered WhatsApp greetings. Never miss wishing someone again. ✨
@@ -96,7 +96,7 @@ const Footer = () => {
         {/* Bottom */}
         <div className="pt-8 border-t border-border/50 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} WishBot. All rights reserved.
+            © {new Date().getFullYear()} WishBird. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <a href="#" className="text-muted-foreground hover:text-primary transition-colors">

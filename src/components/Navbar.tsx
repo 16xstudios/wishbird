@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Sparkles } from "lucide-react";
+import { Menu, X, Bird } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -29,9 +29,9 @@ const Navbar = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
             <div className="w-10 h-10 rounded-xl bg-gradient-cta flex items-center justify-center shadow-button group-hover:shadow-glow transition-shadow">
-              <Sparkles className="w-5 h-5 text-primary-foreground" />
+              <Bird className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-xl text-foreground">WishBot</span>
+            <span className="font-bold text-xl text-foreground">WishBird</span>
           </Link>
 
           {/* Desktop Navigation */}
