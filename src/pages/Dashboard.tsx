@@ -2,8 +2,19 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabaseClient";
+import { initiatePayment } from "@/lib/razorpay";
+import { PLANS, type PlanType } from "@/lib/credits";
 import {
   Sparkles,
   Plus,
@@ -15,15 +26,15 @@ import {
   Trash2,
   User,
   Crown,
-  Zap,
-  Gift,
   Image,
   Video,
   Mic,
   ArrowRight,
   Edit,
   Phone,
-  Mail
+  Mail,
+  Coins,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -48,12 +59,10 @@ interface Profile {
   phone_number: string | null;
   subscription_plan: string;
   wishes_sent_count: number;
+  credits: number;
   created_at: string;
   updated_at: string;
 }
-
-const FREE_WISH_LIMIT = 2;
-const PREMIUM_WISH_LIMIT = 30;
 
 const Dashboard = () => {
   const { user, loading, signOut } = useAuth();
@@ -62,6 +71,10 @@ const Dashboard = () => {
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadingWishes, setLoadingWishes] = useState(true);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editForm, setEditForm] = useState({ displayName: "", phoneNumber: "" });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -78,13 +91,18 @@ const Dashboard = () => {
   const fetchData = async () => {
     if (!user) return;
 
-    // Fetch profile and wishes in parallel
     const [profileResult, wishesResult] = await Promise.all([
       supabase.from("profiles").select("*").eq("user_id", user.id).single(),
-      supabase.from("wishes").select("*").order("scheduled_date", { ascending: true })
+      supabase.from("wishes").select("*").eq("user_id", user.id).order("scheduled_date", { ascending: true })
     ]);
 
-    if (profileResult.data) setProfile(profileResult.data);
+    if (profileResult.data) {
+      setProfile(profileResult.data);
+      setEditForm({
+        displayName: profileResult.data.display_name || "",
+        phoneNumber: profileResult.data.phone_number || "",
+      });
+    }
     if (wishesResult.data) setWishes(wishesResult.data);
     if (wishesResult.error) {
       toast({ title: "Error", description: "Failed to load wishes", variant: "destructive" });
@@ -107,36 +125,89 @@ const Dashboard = () => {
     navigate("/");
   };
 
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setIsSavingProfile(true);
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          display_name: editForm.displayName,
+          phone_number: editForm.phoneNumber,
+        })
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      setProfile((prev) => prev ? {
+        ...prev,
+        display_name: editForm.displayName,
+        phone_number: editForm.phoneNumber,
+      } : null);
+
+      setIsEditingProfile(false);
+      toast({ title: "Profile Updated", description: "Your profile has been saved!" });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to update profile", variant: "destructive" });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleUpgrade = async (plan: "basic" | "pro" | "premium") => {
+    if (!user) return;
+    setIsProcessingPayment(true);
+
+    try {
+      await initiatePayment({
+        plan,
+        userId: user.id,
+        userEmail: user.email || "",
+        userName: profile?.display_name || "",
+        onSuccess: (upgradedPlan, credits) => {
+          setProfile((prev) => prev ? {
+            ...prev,
+            subscription_plan: upgradedPlan,
+            credits: (prev.credits || 0) + credits,
+          } : null);
+          toast({
+            title: "🎉 Payment Successful!",
+            description: `Welcome to ${upgradedPlan.charAt(0).toUpperCase() + upgradedPlan.slice(1)}! ${credits} credits added.`,
+          });
+          setIsProcessingPayment(false);
+        },
+        onError: (error) => {
+          toast({ title: "Payment Failed", description: error, variant: "destructive" });
+          setIsProcessingPayment(false);
+        },
+      });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to initiate payment", variant: "destructive" });
+      setIsProcessingPayment(false);
+    }
+  };
+
   const scheduledWishes = wishes.filter((w) => w.status === "scheduled");
   const sentWishes = wishes.filter((w) => w.status === "sent");
-  const failedWishes = wishes.filter((w) => w.status === "failed");
 
-  const getPlanBadge = (plan: string) => {
-    switch (plan) {
-      case "gold":
-        return { label: "Gold", bg: "bg-gold", text: "text-foreground" };
+  const plan = (profile?.subscription_plan || "free") as PlanType;
+  const credits = profile?.credits || 0;
+
+  const getPlanBadge = (planName: string) => {
+    switch (planName) {
       case "premium":
-        return { label: "Premium", bg: "bg-gradient-cta", text: "text-primary-foreground" };
+        return { label: "Premium", bg: "bg-gradient-to-r from-purple-600 to-pink-500", text: "text-white" };
+      case "pro":
+        return { label: "Pro", bg: "bg-gradient-to-r from-blue-500 to-cyan-400", text: "text-white" };
+      case "basic":
+        return { label: "Basic", bg: "bg-gradient-to-r from-green-500 to-emerald-400", text: "text-white" };
       default:
         return { label: "Free", bg: "bg-muted", text: "text-muted-foreground" };
     }
   };
 
-  const getWishLimit = () => {
-    if (profile?.subscription_plan === "gold") return "Unlimited";
-    if (profile?.subscription_plan === "premium") return PREMIUM_WISH_LIMIT;
-    return FREE_WISH_LIMIT;
-  };
-
-  const getWishesRemaining = () => {
-    if (profile?.subscription_plan === "gold") return "∞";
-    if (profile?.subscription_plan === "premium") {
-      return PREMIUM_WISH_LIMIT - (profile?.wishes_sent_count || 0);
-    }
-    return Math.max(0, FREE_WISH_LIMIT - (profile?.wishes_sent_count || 0));
-  };
-
-  const planBadge = getPlanBadge(profile?.subscription_plan || "free");
+  const planBadge = getPlanBadge(plan);
 
   if (loading) {
     return (
@@ -188,9 +259,18 @@ const Dashboard = () => {
             <span className={`px-4 py-2 rounded-full text-sm font-bold ${planBadge.bg} ${planBadge.text}`}>
               {planBadge.label}
             </span>
-            {profile?.subscription_plan !== "gold" && (
-              <Button variant="hero" size="sm" onClick={() => navigate("/#pricing")}>
-                <Crown className="w-4 h-4 mr-1" />
+            {plan !== "premium" && (
+              <Button
+                variant="hero"
+                size="sm"
+                onClick={() => handleUpgrade(plan === "free" ? "basic" : plan === "basic" ? "pro" : "premium")}
+                disabled={isProcessingPayment}
+              >
+                {isProcessingPayment ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : (
+                  <Crown className="w-4 h-4 mr-1" />
+                )}
                 Upgrade
               </Button>
             )}
@@ -209,7 +289,12 @@ const Dashboard = () => {
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg text-foreground">My Profile</h3>
-                <Button variant="ghost" size="sm" className="text-primary">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-primary"
+                  onClick={() => setIsEditingProfile(true)}
+                >
                   <Edit className="w-4 h-4 mr-1" />
                   Edit
                 </Button>
@@ -259,7 +344,7 @@ const Dashboard = () => {
               </div>
             </motion.div>
 
-            {/* Quick Actions */}
+            {/* Quick Actions - Only New Wish */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -267,92 +352,62 @@ const Dashboard = () => {
               className="bg-card rounded-2xl p-6 border border-border/50 shadow-soft"
             >
               <h3 className="font-bold text-lg text-foreground mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 <Button
                   variant="hero"
-                  className="h-auto py-4 flex-col gap-2"
+                  className="w-full h-auto py-4 flex items-center justify-center gap-3"
                   onClick={() => navigate("/create-wish")}
                 >
                   <Plus className="w-5 h-5" />
-                  <span className="text-xs">New Wish</span>
+                  <span>New Wish</span>
                 </Button>
-                <Button
-                  variant="outline"
-                  className="h-auto py-4 flex-col gap-2 border-border"
-                  onClick={() => document.getElementById("scheduled-section")?.scrollIntoView({ behavior: "smooth" })}
-                >
-                  <Calendar className="w-5 h-5 text-primary" />
-                  <span className="text-xs">Scheduled</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-auto py-4 flex-col gap-2 border-border"
-                  onClick={() => navigate("/#pricing")}
-                >
-                  <Gift className="w-5 h-5 text-secondary" />
-                  <span className="text-xs">Upgrade</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-auto py-4 flex-col gap-2 border-border"
-                  onClick={() => navigate("/create-wish")}
-                >
-                  <Zap className="w-5 h-5 text-gold" />
-                  <span className="text-xs">Urgent</span>
-                </Button>
-              </div>
-            </motion.div>
-
-            {/* Add-ons Shortcuts */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-card rounded-2xl p-6 border border-border/50 shadow-soft"
-            >
-              <h3 className="font-bold text-lg text-foreground mb-4">Add-ons</h3>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-2">
-                    <Image className="w-4 h-4 text-primary" />
-                    <span className="text-sm">Add Image</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {profile?.subscription_plan === "free" ? "+₹10" : "Included ✓"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-2">
-                    <Mic className="w-4 h-4 text-secondary" />
-                    <span className="text-sm">AI Voice Note</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {profile?.subscription_plan === "gold" ? "Included ✓" : "+₹19"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-2">
-                    <Video className="w-4 h-4 text-accent" />
-                    <span className="text-sm">Video Greeting</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {profile?.subscription_plan === "gold" ? "Included ✓" : "+₹29"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-gold" />
-                    <span className="text-sm">Urgent Delivery</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">+₹9</span>
-                </div>
-                {profile?.subscription_plan !== "gold" && (
-                  <p className="text-xs text-gold font-medium pt-2">
-                    💛 Included in Gold plan
-                  </p>
+                {plan !== "premium" && (
+                  <Button
+                    variant="outline"
+                    className="w-full h-auto py-4 flex items-center justify-center gap-3 border-gold text-gold hover:bg-gold/10"
+                    onClick={() => handleUpgrade(plan === "free" ? "basic" : plan === "basic" ? "pro" : "premium")}
+                    disabled={isProcessingPayment}
+                  >
+                    {isProcessingPayment ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Crown className="w-5 h-5" />
+                    )}
+                    <span>Upgrade Plan</span>
+                  </Button>
                 )}
               </div>
             </motion.div>
+
+            {/* Pricing Quick View */}
+            {plan !== "premium" && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="bg-gradient-to-br from-purple-600/10 to-pink-500/10 rounded-2xl p-6 border border-purple-500/20"
+              >
+                <h3 className="font-bold text-lg text-foreground mb-3">💎 Upgrade Benefits</h3>
+                <div className="space-y-2 text-sm">
+                  {plan === "free" && (
+                    <>
+                      <p className="text-muted-foreground">✅ Basic: ₹49/mo - All languages, unlimited images</p>
+                      <p className="text-muted-foreground">✅ Pro: ₹99/mo - + Video messages</p>
+                      <p className="text-muted-foreground">✅ Premium: ₹199/mo - + AI generation, Audio</p>
+                    </>
+                  )}
+                  {plan === "basic" && (
+                    <>
+                      <p className="text-muted-foreground">✅ Pro: ₹99/mo - + Video messages</p>
+                      <p className="text-muted-foreground">✅ Premium: ₹199/mo - + AI generation, Audio</p>
+                    </>
+                  )}
+                  {plan === "pro" && (
+                    <p className="text-muted-foreground">✅ Premium: ₹199/mo - + AI generation, Audio</p>
+                  )}
+                </div>
+              </motion.div>
+            )}
           </div>
 
           {/* Right Column - Stats + Wishes */}
@@ -418,13 +473,11 @@ const Dashboard = () => {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gold/20 flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-gold" />
+                    <Coins className="w-5 h-5 text-gold" />
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-foreground">{getWishesRemaining()}</div>
-                    <div className="text-xs text-muted-foreground">
-                      / {getWishLimit()} Left
-                    </div>
+                    <div className="text-2xl font-bold text-foreground">{credits}</div>
+                    <div className="text-xs text-muted-foreground">Credits Left</div>
                   </div>
                 </div>
               </motion.div>
@@ -548,7 +601,7 @@ const Dashboard = () => {
               >
                 <h3 className="font-bold text-lg text-foreground mb-4">✅ Sent Wishes</h3>
                 <div className="space-y-3">
-                  {sentWishes.slice(0, 3).map((wish) => (
+                  {sentWishes.slice(0, 5).map((wish) => (
                     <div
                       key={wish.id}
                       className="flex items-center justify-between p-4 rounded-xl border border-accent/20 bg-whatsapp-light"
@@ -577,6 +630,47 @@ const Dashboard = () => {
           </div>
         </div>
       </main>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={isEditingProfile} onOpenChange={setIsEditingProfile}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Edit Profile</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="displayName">Display Name</Label>
+              <Input
+                id="displayName"
+                placeholder="Your name"
+                value={editForm.displayName}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, displayName: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number</Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                placeholder="+91 98765 43210"
+                value={editForm.phoneNumber}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditingProfile(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveProfile} disabled={isSavingProfile}>
+              {isSavingProfile ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
