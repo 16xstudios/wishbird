@@ -30,7 +30,7 @@ function formatMessage(wish) {
            `Wishing you a wonderful ${occasion.toLowerCase()}! ` +
            `May this special day bring you joy, happiness, and all the love you deserve.\n\n` +
            `With love,\n${sender_name} 💜\n\n` +
-           `_Sent with love via WishBot_ ✨`;
+           `_Sent with love via WishBird_ ✨`;
 }
 
 /**

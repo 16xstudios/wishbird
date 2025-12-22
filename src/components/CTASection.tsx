@@ -62,7 +62,7 @@ const CTASection = () => {
           </h2>
 
           <p className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto">
-            Let WishBot handle the wishing — you handle the smiling. 💜
+            Let WishBird handle the wishing — you handle the smiling. 💜
           </p>
 
           <Button variant="hero" size="xl" className="group" onClick={() => navigate("/auth")}>

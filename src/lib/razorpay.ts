@@ -50,7 +50,7 @@ export async function initiatePayment({
       key: keyId,
       amount,
       currency: "INR",
-      name: "WishBot",
+      name: "WishBird",
       description: `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan - ${credits} Credits`,
       order_id: orderId,
       handler: async function (response: any) {

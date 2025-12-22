@@ -16,7 +16,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { initiatePayment } from "@/lib/razorpay";
 import { PLANS, type PlanType } from "@/lib/credits";
 import {
-  Sparkles,
+  Bird,
   Plus,
   Calendar,
   CheckCircle,
@@ -37,6 +37,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PlanSelectDialog } from "@/components/PlanSelectDialog";
 
 interface Wish {
   id: string;
@@ -75,6 +76,8 @@ const Dashboard = () => {
   const [editForm, setEditForm] = useState({ displayName: "", phoneNumber: "" });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [showPlanDialog, setShowPlanDialog] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -155,13 +158,13 @@ const Dashboard = () => {
     }
   };
 
-  const handleUpgrade = async (plan: "basic" | "pro" | "premium") => {
+  const handleUpgrade = async (selectedPlan: "basic" | "pro" | "premium") => {
     if (!user) return;
-    setIsProcessingPayment(true);
+    setLoadingPlan(selectedPlan);
 
     try {
       await initiatePayment({
-        plan,
+        plan: selectedPlan,
         userId: user.id,
         userEmail: user.email || "",
         userName: profile?.display_name || "",
@@ -175,17 +178,22 @@ const Dashboard = () => {
             title: "🎉 Payment Successful!",
             description: `Welcome to ${upgradedPlan.charAt(0).toUpperCase() + upgradedPlan.slice(1)}! ${credits} credits added.`,
           });
-          setIsProcessingPayment(false);
+          setLoadingPlan(null);
+          setShowPlanDialog(false);
         },
         onError: (error) => {
           toast({ title: "Payment Failed", description: error, variant: "destructive" });
-          setIsProcessingPayment(false);
+          setLoadingPlan(null);
         },
       });
     } catch (error) {
       toast({ title: "Error", description: "Failed to initiate payment", variant: "destructive" });
-      setIsProcessingPayment(false);
+      setLoadingPlan(null);
     }
+  };
+
+  const openUpgradeDialog = () => {
+    setShowPlanDialog(true);
   };
 
   const scheduledWishes = wishes.filter((w) => w.status === "scheduled");
@@ -212,7 +220,7 @@ const Dashboard = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+        <Bird className="w-8 h-8 text-primary animate-pulse" />
       </div>
     );
   }
@@ -224,9 +232,9 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-cta flex items-center justify-center shadow-button">
-              <Sparkles className="w-5 h-5 text-primary-foreground" />
+              <Bird className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-xl text-foreground">WishBot</span>
+            <span className="font-bold text-xl text-foreground">WishBird</span>
           </Link>
 
           <div className="flex items-center gap-4">
@@ -263,10 +271,10 @@ const Dashboard = () => {
               <Button
                 variant="hero"
                 size="sm"
-                onClick={() => handleUpgrade(plan === "free" ? "basic" : plan === "basic" ? "pro" : "premium")}
-                disabled={isProcessingPayment}
+                onClick={openUpgradeDialog}
+                disabled={!!loadingPlan}
               >
-                {isProcessingPayment ? (
+                {loadingPlan ? (
                   <Loader2 className="w-4 h-4 mr-1 animate-spin" />
                 ) : (
                   <Crown className="w-4 h-4 mr-1" />
@@ -365,10 +373,10 @@ const Dashboard = () => {
                   <Button
                     variant="outline"
                     className="w-full h-auto py-4 flex items-center justify-center gap-3 border-gold text-gold hover:bg-gold/10"
-                    onClick={() => handleUpgrade(plan === "free" ? "basic" : plan === "basic" ? "pro" : "premium")}
-                    disabled={isProcessingPayment}
+                    onClick={openUpgradeDialog}
+                    disabled={!!loadingPlan}
                   >
-                    {isProcessingPayment ? (
+                    {loadingPlan ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <Crown className="w-5 h-5" />
@@ -528,7 +536,7 @@ const Dashboard = () => {
 
               {loadingWishes ? (
                 <div className="text-center py-8">
-                  <Sparkles className="w-8 h-8 text-primary animate-pulse mx-auto" />
+                  <Bird className="w-8 h-8 text-primary animate-pulse mx-auto" />
                 </div>
               ) : scheduledWishes.length === 0 ? (
                 <div className="text-center py-8">
@@ -671,6 +679,15 @@ const Dashboard = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Plan Selection Dialog */}
+      <PlanSelectDialog
+        open={showPlanDialog}
+        onOpenChange={setShowPlanDialog}
+        onSelectPlan={handleUpgrade}
+        loadingPlan={loadingPlan}
+        currentPlan={plan}
+      />
     </div>
   );
 };

@@ -5,7 +5,7 @@ import { initWhatsApp } from './whatsapp.js';
 import { startScheduler } from './scheduler.js';
 
 console.log('═══════════════════════════════════════════════════════════════');
-console.log('   🎉 WishBot WhatsApp Automation Server');
+console.log('   🐦 WishBird WhatsApp Automation Server');
 console.log('═══════════════════════════════════════════════════════════════');
 console.log('');
 

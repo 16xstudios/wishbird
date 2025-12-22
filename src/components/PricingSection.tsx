@@ -13,7 +13,7 @@ const plans = [
     name: "Free",
     price: "₹0",
     period: "/forever",
-    description: "Get started with WishBot",
+    description: "Get started with WishBird",
     helper: "10 credits included",
     icon: Sparkles,
     features: [
