@@ -82,13 +82,14 @@ serve(async (req) => {
       );
     }
 
-    // Record payment
+    // Record payment - TEST PRICES
+    const testAmounts = { basic: 100, pro: 200, premium: 300 };
     const { error: paymentError } = await supabase.from("payments").insert({
       user_id: userId,
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
-      amount: plan === "basic" ? 4900 : plan === "pro" ? 9900 : 19900,
+      amount: testAmounts[plan as keyof typeof testAmounts] || 100,
       currency: "INR",
       plan,
       credits_purchased: planDetails.credits,

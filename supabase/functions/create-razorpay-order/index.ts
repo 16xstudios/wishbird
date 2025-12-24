@@ -5,10 +5,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// TEST PRICES - Change back to real prices before production
 const PLANS = {
-  basic: { amount: 4900, credits: 15 },
-  pro: { amount: 9900, credits: 35 },
-  premium: { amount: 19900, credits: 80 },
+  basic: { amount: 100, credits: 15 },    // ₹1 for testing
+  pro: { amount: 200, credits: 35 },      // ₹2 for testing
+  premium: { amount: 300, credits: 80 },  // ₹3 for testing
 };
 
 serve(async (req) => {
