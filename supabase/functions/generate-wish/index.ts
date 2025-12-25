@@ -13,9 +13,9 @@ serve(async (req) => {
   try {
     const { recipientName, senderName, occasion, language } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
     const languageInstructions: Record<string, string> = {
@@ -38,7 +38,7 @@ serve(async (req) => {
       "Just Because": "💜✨🌟💕🌈",
     };
 
-    const systemPrompt = `You are a creative, emotional wish-writing assistant for WishBot. Your task is to generate heartfelt, unique greetings.
+    const prompt = `You are a creative, emotional wish-writing assistant for WishBot. Your task is to generate heartfelt, unique greetings.
 
 CRITICAL RULES:
 1. ${languageInstructions[language] || languageInstructions.English}
@@ -54,26 +54,26 @@ UNIQUENESS REQUIREMENTS:
 - Use different opening lines every time
 - Vary sentence structures
 - Change metaphors and expressions
-- Alternate between different emotional approaches`;
+- Alternate between different emotional approaches
 
-    const userPrompt = `Generate a unique ${occasion} wish for ${recipientName} from ${senderName}. 
+Generate a unique ${occasion} wish for ${recipientName} from ${senderName}. 
 Language: ${language}
 Make it heartfelt, personal, and completely different from any previous message.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.9,
+            maxOutputTokens: 500,
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -82,19 +82,13 @@ Make it heartfelt, personal, and completely different from any previous message.
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI usage limit reached. Please try again later." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const errorText = await response.text();
-      console.error("AI Gateway error:", response.status, errorText);
+      console.error("Gemini API error:", response.status, errorText);
       throw new Error("Failed to generate wish");
     }
 
     const data = await response.json();
-    const generatedWish = data.choices?.[0]?.message?.content;
+    const generatedWish = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!generatedWish) {
       throw new Error("No wish generated");

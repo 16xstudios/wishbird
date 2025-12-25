@@ -117,14 +117,55 @@ export async function sendMediaFromUrl(phone, url, caption = '', type = 'image')
     const chatId = formatPhoneNumber(phone);
 
     try {
-        const media = await MessageMedia.fromUrl(url, { unsafeMime: true });
+        console.log(`fetching media from ${url}...`);
+
+        // Custom fetch to ensure we get the data correctly
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        // Get mimetype from headers or fallback based on type
+        let mimetype = response.headers.get('content-type');
+        if (!mimetype) {
+            if (type === 'video') mimetype = 'video/mp4';
+            else if (type === 'audio') mimetype = 'audio/mpeg';
+            else mimetype = 'image/jpeg';
+        }
+
+        const data = buffer.toString('base64');
+        const filename = url.split('/').pop().split('?')[0] || (type === 'video' ? 'video.mp4' : 'file');
+
+        console.log(`   📎 Media size: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
+
+        const media = new MessageMedia(mimetype, data, filename);
 
         // For audio/voice notes, send as PTT (push-to-talk)
         if (type === 'audio') {
             return await client.sendMessage(chatId, media, { sendAudioAsVoice: true });
         }
 
+        // For videos, try sending as video first, then fallback to document
+        if (type === 'video') {
+            try {
+                return await client.sendMessage(chatId, media, {
+                    caption: caption,
+                    sendMediaAsDocument: false
+                });
+            } catch (videoError) {
+                console.log(`   ⚠️ Failed to send as video stream (${videoError.message}), retrying as document...`);
+                return await client.sendMessage(chatId, media, {
+                    caption: caption,
+                    sendMediaAsDocument: true
+                });
+            }
+        }
+
         return await client.sendMessage(chatId, media, { caption });
+
     } catch (error) {
         console.error(`Failed to send media from ${url}:`, error.message);
         throw error;
