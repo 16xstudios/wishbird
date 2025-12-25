@@ -58,6 +58,17 @@ const CreateWish = () => {
     credits: number;
   } | null>(null);
 
+  // Get current date and time for restrictions
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const todayStr = `${year}-${month}-${day}`;
+
+  const currentHours = String(now.getHours()).padStart(2, "0");
+  const currentMinutes = String(now.getMinutes()).padStart(2, "0");
+  const currentTimeStr = `${currentHours}:${currentMinutes}`;
+
   // Form state
   const [formData, setFormData] = useState({
     senderName: "",
@@ -496,8 +507,8 @@ const CreateWish = () => {
                       <span className="text-xs text-muted-foreground">(English only on Free)</span>
                     )}
                   </Label>
-                  <Select 
-                    value={formData.language} 
+                  <Select
+                    value={formData.language}
                     onValueChange={(v) => handleChange("language", v)}
                     disabled={plan === "free"}
                   >
@@ -523,8 +534,17 @@ const CreateWish = () => {
                     <Input
                       id="scheduledDate"
                       type="date"
+                      min={todayStr}
                       value={formData.scheduledDate}
-                      onChange={(e) => handleChange("scheduledDate", e.target.value)}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        if (newDate < todayStr) return; // Prevent past dates
+                        handleChange("scheduledDate", newDate);
+                        // Reset time if date changes to today and time is in past
+                        if (newDate === todayStr && formData.scheduledTime < currentTimeStr) {
+                          handleChange("scheduledTime", "");
+                        }
+                      }}
                       required
                       className="pl-10"
                     />
@@ -536,8 +556,15 @@ const CreateWish = () => {
                   <Input
                     id="scheduledTime"
                     type="time"
+                    min={formData.scheduledDate === todayStr ? currentTimeStr : undefined}
                     value={formData.scheduledTime}
-                    onChange={(e) => handleChange("scheduledTime", e.target.value)}
+                    onChange={(e) => {
+                      const newTime = e.target.value;
+                      if (formData.scheduledDate === todayStr && newTime < currentTimeStr) {
+                        return; // Prevent past time on current day
+                      }
+                      handleChange("scheduledTime", newTime);
+                    }}
                     required
                   />
                 </div>
@@ -596,9 +623,8 @@ const CreateWish = () => {
                     />
                     <label
                       htmlFor="photo-upload"
-                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
-                        photoPreview ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-                      }`}
+                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${photoPreview ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                        }`}
                     >
                       {photoPreview ? (
                         <img src={photoPreview} alt="Preview" className="w-12 h-12 object-cover rounded-lg" />
@@ -633,13 +659,12 @@ const CreateWish = () => {
                     />
                     <label
                       htmlFor="video-upload"
-                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl transition-colors ${
-                        !canUseVideo 
-                          ? "border-border/30 bg-muted/30 cursor-not-allowed opacity-60" 
-                          : videoPreview 
-                            ? "border-primary bg-primary/5 cursor-pointer" 
+                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl transition-colors ${!canUseVideo
+                          ? "border-border/30 bg-muted/30 cursor-not-allowed opacity-60"
+                          : videoPreview
+                            ? "border-primary bg-primary/5 cursor-pointer"
                             : "border-border hover:border-primary/50 cursor-pointer"
-                      }`}
+                        }`}
                     >
                       {!canUseVideo && <Lock className="w-4 h-4 text-muted-foreground mb-1" />}
                       <span className="text-2xl mb-1">🎥</span>
@@ -673,13 +698,12 @@ const CreateWish = () => {
                     />
                     <label
                       htmlFor="audio-upload"
-                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl transition-colors ${
-                        !canUseAudio 
-                          ? "border-border/30 bg-muted/30 cursor-not-allowed opacity-60" 
-                          : audioPreview 
-                            ? "border-primary bg-primary/5 cursor-pointer" 
+                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl transition-colors ${!canUseAudio
+                          ? "border-border/30 bg-muted/30 cursor-not-allowed opacity-60"
+                          : audioPreview
+                            ? "border-primary bg-primary/5 cursor-pointer"
                             : "border-border hover:border-primary/50 cursor-pointer"
-                      }`}
+                        }`}
                     >
                       {!canUseAudio && <Lock className="w-4 h-4 text-muted-foreground mb-1" />}
                       <span className="text-2xl mb-1">🔊</span>

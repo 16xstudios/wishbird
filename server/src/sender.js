@@ -21,7 +21,7 @@ function formatMessage(wish) {
     
     // If user provided custom message, use it
     if (message_text && message_text.trim()) {
-        return message_text;
+        return `${message_text}\n\nfrom : ${sender_name}`;
     }
     
     // Default template message
@@ -29,7 +29,7 @@ function formatMessage(wish) {
            `Dear ${recipient_name},\n\n` +
            `Wishing you a wonderful ${occasion.toLowerCase()}! ` +
            `May this special day bring you joy, happiness, and all the love you deserve.\n\n` +
-           `With love,\n${sender_name} 💜\n\n` +
+           `from : ${sender_name}\n\n` +
            `_Sent with love via WishBird_ ✨`;
 }
 
@@ -76,7 +76,7 @@ export async function sendWish(wish) {
         const imageUrl = greeting_card_url || photo_url;
         if (imageUrl) {
             try {
-                const caption = `🎉 *${occasion} Wishes!*\nFrom: ${sender_name} 💜`;
+                const caption = `🎉 *${occasion} Wishes!*\nfrom : ${sender_name}`;
                 await sendMediaFromUrl(recipient_phone, imageUrl, caption, 'image');
                 console.log('   ✅ Image/greeting card sent');
                 messagesSent++;
@@ -89,7 +89,7 @@ export async function sendWish(wish) {
         // 3. Send video
         if (video_url) {
             try {
-                const caption = `🎬 *Video Message*\nFrom: ${sender_name}`;
+                const caption = `🎬 *Video Message*\nfrom : ${sender_name}`;
                 await sendMediaFromUrl(recipient_phone, video_url, caption, 'video');
                 console.log('   ✅ Video sent');
                 messagesSent++;
